@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "start": "yarn hardhat run ./scripts/test.js --network mainnet"
+    "start": "yarn hardhat run ./scripts/bot.js --network mainnet"
   },
   "devDependencies": {
     "@chainlink/contracts": "^0.4.1",

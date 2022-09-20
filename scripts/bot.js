@@ -117,13 +117,16 @@ const checkColletaral = async (
         log(`current ICR: ${icrNumber}`, "red");
         if (icrNumber >= 1.1) {
           log("No Troves can be liquidate...");
-          return;
+          break;
         }
         liquidateTroves.push(trove);
       }
+      log("trove check ends...", "blue");
 
       // Use batchLiquidate if some troves can liquidate
       if (liquidateTroves.length > 0) {
+        log(`try to liquidate ${troves.length} trove(s)...`);
+
         const tx = await troveManager.batchLiquidateTroves(liquidateTroves);
 
         const receipt = await tx.wait(1);
