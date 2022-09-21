@@ -82,6 +82,8 @@ async function main() {
     troveManager,
     ethers.utils.parseEther(clPrice)
   );
+  lastPrice = ethers.utils.parseEther(clPrice);
+  log(`Last Price: ${lastPrice}`, "green");
   log("-----------------------------", "blue");
   log("Starting looking for event...", "blue");
 }
