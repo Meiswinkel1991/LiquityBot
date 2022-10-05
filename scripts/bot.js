@@ -1,9 +1,3 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// You can also run a script with `npx hardhat run <script>`. If you do that, Hardhat
-// will compile your contracts, add the Hardhat Runtime Environment's members to the
-// global scope, and execute the script.
 const hre = require("hardhat");
 const { ethers } = require("ethers");
 require("dotenv").config();
@@ -13,8 +7,8 @@ colors.setTheme({
   custom: ["rainbow", "bold", "underline", "dim"],
 });
 
+/** Smart Contract Data */
 const mainnetData = require("../addresses/mainnet.json");
-const priceFeedAbi = require("../abi/PriceFeed.json");
 const multiTroveGetterAbi = require("../abi/MultiTroveGetter.json");
 const troveManagerAbi = require("../abi/TroveManager.json");
 
@@ -25,16 +19,9 @@ async function main() {
     MAINNET_RPC_URL,
     "mainnet"
   );
+  const signer = await hre.ethers.getSigner();
 
-  // get all needed contracts for the bot
-
-  //priceFeed for listening to new ETH price
-  // const priceFeedAddress = mainnetData.addresses["priceFeed"];
-  // const priceFeed = new ethers.Contract(
-  //   priceFeedAddress,
-  //   priceFeedAbi,
-  //   provider
-  // );
+  /** Liquity Contracts */
 
   // possible to fetch all troves in a sorted list
   const multiTroveGetterAddress = mainnetData.addresses["multiTroveGetter"];
@@ -43,8 +30,6 @@ async function main() {
     multiTroveGetterAddress
   );
 
-  const signer = await hre.ethers.getSigner();
-
   // troveManager: to get current ICR of the troves
   const troveManagerAddress = mainnetData.addresses["troveManager"];
   const troveManager = await hre.ethers.getContractAt(
@@ -52,25 +37,6 @@ async function main() {
     troveManagerAddress,
     signer
   );
-
-  // let lastPrice = ethers.utils.parseEther("0");
-
-  // priceFeed.on("LastGoodPriceUpdated", async (price) => {
-  //   log(`new price from pricefeed: ${price}`, "green");
-  //   if (lastPrice.gt(price)) {
-  //     log(
-  //       `price: ${ethers.utils.formatEther(
-  //         price
-  //       )} is lower than ${ethers.utils.formatEther(lastPrice)}`
-  //     );
-
-  //     //If new price is lower than the last price
-  //     // check all troves for the new Current ICR
-  //     await checkColletaral(multiTroveGetter, troveManager, price);
-  //   }
-
-  //   lastPrice = price;
-  // });
 
   let liquidationPrice;
   let troves = [];
@@ -107,7 +73,7 @@ async function main() {
   console.log(colors.custom(`====== LIQUITY BOT ======`));
   console.log("");
   log("-----------------------------", "blue");
-  // log("Starting with Chainlink price...", "blue");
+
   const clPrice = await getChainLinkPrice(signer);
 
   troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
@@ -117,8 +83,7 @@ async function main() {
     troveManager,
     ethers.utils.parseEther(clPrice)
   );
-  // lastPrice = ethers.utils.parseEther(clPrice);
-  // log(`Last Price: ${lastPrice}`, "green");
+
   log("-----------------------------", "blue");
   log("Starting looking for event...", "blue");
 
@@ -146,7 +111,7 @@ function log(message, color) {
 const checkColletaral = async (troves, troveManager, currentPrice) => {
   try {
     let liquidationPrice;
-    // const troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
+
     let liquidateTroves = [];
     if (troves.length) {
       for (let index = 0; index < troves.length; index++) {
