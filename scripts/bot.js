@@ -29,12 +29,12 @@ async function main() {
   // get all needed contracts for the bot
 
   //priceFeed for listening to new ETH price
-  const priceFeedAddress = mainnetData.addresses["priceFeed"];
-  const priceFeed = new ethers.Contract(
-    priceFeedAddress,
-    priceFeedAbi,
-    provider
-  );
+  // const priceFeedAddress = mainnetData.addresses["priceFeed"];
+  // const priceFeed = new ethers.Contract(
+  //   priceFeedAddress,
+  //   priceFeedAbi,
+  //   provider
+  // );
 
   // possible to fetch all troves in a sorted list
   const multiTroveGetterAddress = mainnetData.addresses["multiTroveGetter"];
@@ -53,39 +53,80 @@ async function main() {
     signer
   );
 
-  let lastPrice = ethers.utils.parseEther("0");
+  // let lastPrice = ethers.utils.parseEther("0");
 
-  priceFeed.on("LastGoodPriceUpdated", async (price) => {
-    log(`new price from pricefeed: ${price}`, "green");
-    if (lastPrice.gt(price)) {
-      log(
-        `price: ${ethers.utils.formatEther(
-          price
-        )} is lower than ${ethers.utils.formatEther(lastPrice)}`
-      );
+  // priceFeed.on("LastGoodPriceUpdated", async (price) => {
+  //   log(`new price from pricefeed: ${price}`, "green");
+  //   if (lastPrice.gt(price)) {
+  //     log(
+  //       `price: ${ethers.utils.formatEther(
+  //         price
+  //       )} is lower than ${ethers.utils.formatEther(lastPrice)}`
+  //     );
 
-      //If new price is lower than the last price
-      // check all troves for the new Current ICR
-      await checkColletaral(multiTroveGetter, troveManager, price);
-    }
+  //     //If new price is lower than the last price
+  //     // check all troves for the new Current ICR
+  //     await checkColletaral(multiTroveGetter, troveManager, price);
+  //   }
 
-    lastPrice = price;
+  //   lastPrice = price;
+  // });
+
+  let liquidationPrice;
+  let troves = [];
+
+  /** Event Listeners */
+  troveManager.on("TroveUpdated", async (info) => {
+    console.log(info);
+    const clPrice = await getChainLinkPrice(signer);
+
+    troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
+
+    liquidationPrice = await checkColletaral(
+      troves,
+      troveManager,
+      ethers.utils.parseEther(clPrice)
+    );
   });
+
+  troveManager.on("TroveIndexUpdated", async (info) => {
+    console.log(info);
+    const clPrice = await getChainLinkPrice(signer);
+
+    troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
+
+    liquidationPrice = await checkColletaral(
+      troves,
+      troveManager,
+      ethers.utils.parseEther(clPrice)
+    );
+  });
+
+  /** Bot Start */
   console.log("");
   console.log(colors.custom(`====== LIQUITY BOT ======`));
   console.log("");
   log("-----------------------------", "blue");
-  log("Starting with Chainlink price...", "blue");
+  // log("Starting with Chainlink price...", "blue");
   const clPrice = await getChainLinkPrice(signer);
-  await checkColletaral(
-    multiTroveGetter,
+
+  troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
+
+  liquidationPrice = await checkColletaral(
+    troves,
     troveManager,
     ethers.utils.parseEther(clPrice)
   );
-  lastPrice = ethers.utils.parseEther(clPrice);
-  log(`Last Price: ${lastPrice}`, "green");
+  // lastPrice = ethers.utils.parseEther(clPrice);
+  // log(`Last Price: ${lastPrice}`, "green");
   log("-----------------------------", "blue");
   log("Starting looking for event...", "blue");
+
+  setInterval(
+    async () =>
+      await checkToLiquidate(signer, liquidationPrice, troves, troveManager),
+    10000
+  );
 }
 
 // We recommend this pattern to be able to use async/await everywhere
@@ -102,13 +143,10 @@ function log(message, color) {
   );
 }
 
-const checkColletaral = async (
-  multiTroveGetter,
-  troveManager,
-  currentPrice
-) => {
+const checkColletaral = async (troves, troveManager, currentPrice) => {
   try {
-    const troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
+    let liquidationPrice;
+    // const troves = await multiTroveGetter.getMultipleSortedTroves(-1, 50);
     let liquidateTroves = [];
     if (troves.length) {
       for (let index = 0; index < troves.length; index++) {
@@ -118,7 +156,13 @@ const checkColletaral = async (
         const icrNumber = parseFloat(ethers.utils.formatEther(icr));
         log(`current ICR: ${icrNumber}`, "red");
         if (icrNumber >= 1.1) {
-          log("No Troves can be liquidate...");
+          if (liquidateTroves.length === 0) {
+            log("No Troves can be liquidate...");
+          }
+          liquidationPrice =
+            (parseFloat(ethers.utils.formatEther(currentPrice)) * 1.1) /
+            icrNumber;
+
           break;
         }
         liquidateTroves.push(trove);
@@ -137,7 +181,9 @@ const checkColletaral = async (
           log("Succesfull liquidate trove(s)...", "green");
         }
       }
+      log(`Actual liquidation price is ${liquidationPrice}`);
     }
+    return liquidationPrice;
   } catch (e) {
     log(`error: ${e}`);
   }
@@ -159,3 +205,20 @@ const getChainLinkPrice = async (signer) => {
 
   return _price.toString();
 };
+
+async function checkToLiquidate(
+  signer,
+  liquidationPrice,
+  troves,
+  troveManager
+) {
+  const _price = await getChainLinkPrice(signer);
+
+  if (parseFloat(_price) <= liquidationPrice) {
+    await checkColletaral(
+      troves,
+      troveManager,
+      ethers.utils.parseEther(_price)
+    );
+  }
+}
