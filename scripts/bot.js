@@ -11,6 +11,7 @@ colors.setTheme({
 const mainnetData = require("../addresses/mainnet.json");
 const multiTroveGetterAbi = require("../abi/MultiTroveGetter.json");
 const troveManagerAbi = require("../abi/TroveManager.json");
+const priceFeedAbi = require("../abi/PriceFeed.json");
 
 const MAINNET_RPC_URL = process.env.MAINNET_RPC_URL;
 
@@ -38,8 +39,18 @@ async function main() {
     signer
   );
 
+  const priceFeedAddress = mainnetData.addresses["priceFeed"];
+  const priceFeed = new ethers.Contract(
+    priceFeedAddress,
+    priceFeedAbi,
+    provider
+  );
+
   let liquidationPrice;
   let troves = [];
+
+  let interval = false;
+  let intervalPriceCheck;
 
   /** Event Listeners */
   troveManager.on("TroveUpdated", async (info) => {
@@ -68,6 +79,37 @@ async function main() {
     );
   });
 
+  priceFeed.on("LastGoodPriceUpdated", async (price) => {
+    liquidationPrice = await checkColletaral(
+      troves,
+      troveManager,
+      ethers.utils.parseEther(clPrice)
+    );
+
+    const icr = await troveManager.getCurrentICR(troves[0][0], price);
+
+    if (icr < 1.3) {
+      if (!interval) {
+        intervalPriceCheck = setInterval(
+          async () =>
+            await checkToLiquidate(
+              signer,
+              liquidationPrice,
+              troves,
+              troveManager
+            ),
+          10000
+        );
+        interval = true;
+      }
+    } else {
+      if (interval) {
+        clearInterval(intervalPriceCheck);
+        interval = false;
+      }
+    }
+  });
+
   /** Bot Start */
   console.log("");
   console.log(colors.custom(`====== LIQUITY BOT ======`));
@@ -86,12 +128,6 @@ async function main() {
 
   log("-----------------------------", "blue");
   log("Starting looking for event...", "blue");
-
-  setInterval(
-    async () =>
-      await checkToLiquidate(signer, liquidationPrice, troves, troveManager),
-    10000
-  );
 }
 
 // We recommend this pattern to be able to use async/await everywhere
