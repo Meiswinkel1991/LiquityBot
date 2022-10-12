@@ -80,6 +80,7 @@ async function main() {
   });
 
   priceFeed.on("LastGoodPriceUpdated", async (price) => {
+    log(`Ne Price: ${price}`, "yellow");
     liquidationPrice = await checkColletaral(
       troves,
       troveManager,
