@@ -80,7 +80,7 @@ async function main() {
   });
 
   priceFeed.on("LastGoodPriceUpdated", async (price) => {
-    log(`Ne Price: ${price}`, "yellow");
+    log(`New Price: ${price}`, "yellow");
     liquidationPrice = await checkColletaral(
       troves,
       troveManager,
@@ -88,8 +88,8 @@ async function main() {
     );
 
     const icr = await troveManager.getCurrentICR(troves[0][0], price);
-
-    if (icr < 1.3) {
+    // ethers.utils.formatEther(icr)
+    if (parseFloat(ethers.utils.formatEther(icr)) < 1.2) {
       if (!interval) {
         intervalPriceCheck = setInterval(
           async () =>
@@ -99,7 +99,7 @@ async function main() {
               troves,
               troveManager
             ),
-          10000
+          50000
         );
         interval = true;
       }
